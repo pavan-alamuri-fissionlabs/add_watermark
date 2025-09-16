@@ -2,12 +2,11 @@ import os
 import uuid
 import shutil
 
-from typing import List
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from celery.result import AsyncResult
 
-from add_watermark import add_watermark_to_pdf, add_watermark_to_image, add_watermark_to_docx, add_watermark_to_rtf
+from add_watermark import add_watermark_to_pdf, add_watermark_to_image, add_watermark_to_docx, add_watermark_to_rtf, add_watermark_to_csv, add_watermark_to_svg, add_watermark_to_pptx
 from models import InputFileBatch
 from celery_worker import celery_app
 
@@ -48,7 +47,6 @@ def get_task_status(task_id: str):
         if task_result.ready():
             if task_result.successful():
                 response["result"] = "Processing complete. Please use the download link."
-                response["download_url"] = f"/download/{task_id}"
             else:
                 response["result"] = str(task_result.info)  # Get exception info
         return response
@@ -67,6 +65,7 @@ def download_zip_file(task_id: str, background_tasks: BackgroundTasks):
     """
     
     try:
+        print(task_id,"****************")
         task_result = AsyncResult(task_id, app=celery_app)
 
         if not task_result.ready():
@@ -76,7 +75,8 @@ def download_zip_file(task_id: str, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
 
         zip_file_path = task_result.result
-        
+        print(task_result.result,"==================")
+        print(zip_file_path,"-------------------")
         if not os.path.exists(zip_file_path):
             raise HTTPException(status_code=404, detail="File not found.")
 
@@ -128,6 +128,14 @@ def add_watermark_to_files_and_zip(file_paths, env):
                     add_watermark_to_image(file_path, output_path)
                 elif ext == "rtf":
                     add_watermark_to_rtf(file_path, output_path)
+                elif ext == 'csv':
+                    file_name = os.path.basename(file_path).split('.')[0] + f"-DRAFT.pdf"
+                    output_path = os.path.join(output_dir, file_name)
+                    add_watermark_to_csv(file_path, output_path)
+                elif ext == 'svg':
+                    add_watermark_to_svg(file_path, output_path)
+                elif ext in ['pptx', 'ppt']:
+                    add_watermark_to_pptx(file_path, output_path)
                 else:
                     # Skip unsupported files or handle them as needed
                     continue
