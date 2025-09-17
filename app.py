@@ -1,9 +1,10 @@
 import os
 import uuid
 import shutil
+import zipstream
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from celery.result import AsyncResult
 
 from add_watermark import add_watermark_to_pdf, add_watermark_to_image, add_watermark_to_docx, add_watermark_to_rtf, add_watermark_to_csv, add_watermark_to_svg, add_watermark_to_pptx
@@ -116,6 +117,38 @@ def download_zip_file(task_id: str):
 
     except Exception as e:
         raise e
+    
+@app.get("/download/stream")
+async def download_zip_file_stream(task_id: str):
+    """
+    Streams the zipped file of watermarked documents.
+    Params:
+        - task_id: ID of the Celery task.
+    Returns: Streaming Zip File
+    """
+    try:
+        task_result = AsyncResult(task_id, app=celery_app)
+
+        if not task_result.ready():
+            raise HTTPException(status_code=404, detail="Task not yet completed.")
+        
+        if not task_result.successful():
+            raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
+
+        zip_file_path = task_result.result
+
+        if not os.path.exists(zip_file_path):
+            raise HTTPException(status_code=404, detail="File not found.")
+
+        # Instead of loading file fully, stream it
+        z = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_DEFLATED)
+        z.write(zip_file_path, arcname="draft_files.zip")
+
+        headers = {"Content-Disposition": 'attachment; filename="draft_files.zip"'}
+        return StreamingResponse(z, media_type="application/zip", headers=headers)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @celery_app.task
 def add_watermark_to_files_and_zip(file_paths, source, task_id):

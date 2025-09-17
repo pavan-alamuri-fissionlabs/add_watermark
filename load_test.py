@@ -51,9 +51,10 @@ async def run_task(session, request_id):
 
         # --- Step 3: Download file ---
         DOWNLOAD_API_URL = f"{DOWNLOAD_API}?task_id={task_id}"
+        download_start = time.time()
         async with session.get(DOWNLOAD_API_URL) as download_resp:
             if download_resp.status != 200:
-                return request_id, download_resp.status, api_time, total_time, "Download Failed"
+                return request_id, download_resp.status, api_time, total_time, None, "Download Failed"
             
             # Read the file content (zipped folder in bytes)
             content = await download_resp.read()
@@ -63,7 +64,10 @@ async def run_task(session, request_id):
             with open(output_file, "wb") as f:
                 f.write(content)
 
-        return request_id, resp.status, api_time, total_time, "SUCCESS"
+        download_time = time.time() - download_start
+
+        return request_id, resp.status, api_time, total_time, download_time, "SUCCESS"
+
 
 
     except Exception as e:
@@ -71,8 +75,8 @@ async def run_task(session, request_id):
 
 
 async def main():
-    num_requests = 1
-    max_workers = 1
+    num_requests = 50
+    max_workers = 10
 
     connector = aiohttp.TCPConnector(limit=max_workers)  # concurrency limit
     results = []
@@ -102,6 +106,7 @@ def save_to_excel(results, filename="output/load_test_results.xlsx"):
         "Status Code",
         "API Response Time (s)",
         "Task Completion Time (s)",
+        "Download Time (s)",
         "Final Status"
     ])
 
