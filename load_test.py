@@ -61,8 +61,8 @@ async def run_task(session, request_id):
 
             # Save as zip file
             output_file = f"../../Downloads/{task_id}.zip"
-            with open(output_file, "wb") as f:
-                f.write(content)
+            with asyncio.to_thread(open, output_file, "wb") as f:
+                await asyncio.to_thread(f.write, content)
 
         download_time = time.time() - download_start
 
@@ -75,8 +75,8 @@ async def run_task(session, request_id):
 
 
 async def main():
-    num_requests = 50
-    max_workers = 10
+    num_requests = 1
+    max_workers = 1
 
     connector = aiohttp.TCPConnector(limit=max_workers)  # concurrency limit
     results = []

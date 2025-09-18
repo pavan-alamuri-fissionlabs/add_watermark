@@ -36,7 +36,7 @@ def csv_to_pdf(csv_file, pdf_file):
     df = pd.read_csv(csv_file)
 
     c = canvas.Canvas(pdf_file, pagesize=A4)
-    width, height = A4
+    _, height = A4
 
     text = c.beginText(40, height - 40)
     text.setFont("Helvetica", 10)
@@ -172,10 +172,12 @@ def add_watermark_to_image(image_path, output_path, watermark_text="DRAFT"):
 
 @celery_app.task
 def add_watermark_to_rtf(rtf_path, output_path, watermark_text="DRAFT"):
+    # Not implemented because the conversion tools do not support RTF watermarking well
     pass
 
 @celery_app.task
 def add_watermark_to_docx(input_doc_path, output_doc_path, watermark_text="DRAFT"):
+    # Not implemented because python-docx does not support watermarking well
     pass
 
 @celery_app.task

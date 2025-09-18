@@ -72,7 +72,7 @@ def test_download_zip_file_success(tmp_path):
         mock_result.result = str(fake_zip)
         mock_async.return_value = mock_result
 
-        with patch("app.cleanup_file") as mock_cleanup:
+        with patch("app.cleanup_file"):
             response = client.get("/download/", params={"task_id": "tid"})
             assert response.status_code == 200
             assert response.headers["content-type"] == "application/zip"

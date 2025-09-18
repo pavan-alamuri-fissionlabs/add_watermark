@@ -116,7 +116,7 @@ def download_zip_file(task_id: str):
 
 
     except Exception as e:
-        raise e
+        raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/download/stream")
 async def download_zip_file_stream(task_id: str):
@@ -163,7 +163,7 @@ def add_watermark_to_files_and_zip(file_paths, source, task_id):
     """
     
     if source != "PREPROD":
-        raise Exception("Batch processing is only allowed in PREPROD environment.")
+        raise ValueError("Invalid source. Only 'PREPROD' sourced files will be processed.")
 
     output_dir = f"output/{task_id}"
     os.makedirs(output_dir, exist_ok=True)
@@ -191,11 +191,11 @@ def add_watermark_to_files_and_zip(file_paths, source, task_id):
                 # Skip unsupported files
                 continue
         except Exception as e:
-            raise e
+            raise ValueError(f"Error processing file {file_path}: {e}") 
 
     if not processed_files:
         shutil.rmtree(output_dir)
-        raise Exception("No files were successfully processed.")
+        raise ValueError("No files were processed. Please check the input files and their formats.")
 
     # Zip the processed files
     zip_output_path = f"output/{task_id}"
@@ -215,5 +215,5 @@ def cleanup_file(file_path: str):
     try:
         os.remove(file_path)
     except OSError as e:
-        raise f"Error deleting file {file_path}: {e}"
+        raise ValueError(f"Error deleting file {file_path}: {e}")
 
