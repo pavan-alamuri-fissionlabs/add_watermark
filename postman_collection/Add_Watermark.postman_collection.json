@@ -1,0 +1,191 @@
+{
+	"info": {
+		"_postman_id": "515b0186-0248-4bd6-9374-dc7154bf5b93",
+		"name": "Add_Watermark",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "48190723"
+	},
+	"item": [
+		{
+			"name": "Batch_Files (multiple files payload)",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"file_paths\": [\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01.pdf\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01_image.jpeg\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01_image.jpg\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01_image.png\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01_table.svg\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01_pwr_pnt.ppt\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae01_pwr_pnt.ppt\",\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/tsfae03_sheet.csv\"\n    ],\n    \"source\": \"PREPROD\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{LocalBaseURL}}/watermark/batch",
+					"host": [
+						"{{LocalBaseURL}}"
+					],
+					"path": [
+						"watermark",
+						"batch"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Batch_Files (single file payload)",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"file_paths\": [\n        \"/home/fl-lpt-690/Downloads/add_watermark/input/100_mb.pdf\"\n    ],\n    \"source\": \"PREPROD\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{LocalBaseURL}}/watermark/batch",
+					"host": [
+						"{{LocalBaseURL}}"
+					],
+					"path": [
+						"watermark",
+						"batch"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Task_Status",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{LocalBaseURL}}/status?task_id=6af11e8f-b4d9-4c4c-a67c-005384627dc2",
+					"host": [
+						"{{LocalBaseURL}}"
+					],
+					"path": [
+						"status"
+					],
+					"query": [
+						{
+							"key": "task_id",
+							"value": "6af11e8f-b4d9-4c4c-a67c-005384627dc2"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Download_Zip",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"task_id\": \"\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{LocalBaseURL}}/download?task_id=e5f20b51-db24-44eb-ac59-140ed5766ffe",
+					"host": [
+						"{{LocalBaseURL}}"
+					],
+					"path": [
+						"download"
+					],
+					"query": [
+						{
+							"key": "task_id",
+							"value": "e5f20b51-db24-44eb-ac59-140ed5766ffe"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Download_Zip_Sream",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"task_id\": \"\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{LocalBaseURL}}/download?task_id=6af11e8f-b4d9-4c4c-a67c-005384627dc2",
+					"host": [
+						"{{LocalBaseURL}}"
+					],
+					"path": [
+						"download"
+					],
+					"query": [
+						{
+							"key": "task_id",
+							"value": "6af11e8f-b4d9-4c4c-a67c-005384627dc2"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "LocalBaseURL",
+			"value": "",
+			"type": "default"
+		}
+	]
+}
