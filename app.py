@@ -3,11 +3,12 @@ import uuid
 import shutil
 import zipstream
 
+import add_watermark as aw
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from celery.result import AsyncResult
 
-from add_watermark import add_watermark_to_pdf, add_watermark_to_image, add_watermark_to_docx, add_watermark_to_rtf, add_watermark_to_csv, add_watermark_to_svg, add_watermark_to_pptx
 from models import InputFileBatch
 from celery_worker import celery_app
 
@@ -16,17 +17,17 @@ app = FastAPI()
 
 # Mapping of extensions to handler functions
 EXTENSION_HANDLERS = {
-    "pdf": add_watermark_to_pdf,
-    "docx": add_watermark_to_docx,
-    "doc": add_watermark_to_docx,
-    "jpg": add_watermark_to_image,
-    "jpeg": add_watermark_to_image,
-    "png": add_watermark_to_image,
-    "rtf": add_watermark_to_rtf,
-    "csv": add_watermark_to_csv,
-    "svg": add_watermark_to_svg,
-    "pptx": add_watermark_to_pptx,
-    "ppt": add_watermark_to_pptx,
+    "pdf": aw.add_watermark_to_pdf,
+    "docx": aw.add_watermark_to_docx,
+    "doc": aw.add_watermark_to_docx,
+    "jpg": aw.add_watermark_to_image,
+    "jpeg": aw.add_watermark_to_image,
+    "png": aw.add_watermark_to_image,
+    "rtf": aw.add_watermark_to_rtf,
+    "csv": aw.add_watermark_to_csv,
+    "svg": aw.add_watermark_to_svg,
+    "pptx": aw.add_watermark_to_pptx,
+    "ppt": aw.add_watermark_to_pptx,
 }
 
 @app.post("/watermark/batch/")
@@ -95,21 +96,29 @@ def download_zip_file(task_id: str):
         if not task_result.successful():
             raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
 
-        zip_file_path = task_result.result
+        file_path, zipped = task_result.result
 
-        if not os.path.exists(zip_file_path):
+        if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="File not found.")
+        
+        if not zipped:
+            file_name=os.path.basename(file_path)
+            headers = {
+                'Content-Disposition': f'attachment; filename="{file_name}"'
+            }
+            return FileResponse(
+                path=file_path,
+                headers=headers,
+                media_type='application/octet-stream'
+            )
 
         file_name = "draft_files.zip"
-
         headers = {
             'Content-Disposition': f'attachment; filename="{file_name}"'
         }
-        
         # background_tasks.add_task(cleanup_file, zip_file_path)
-
         return FileResponse(
-            path=zip_file_path, 
+            path=file_path, 
             headers=headers, 
             media_type='application/zip'
         )
@@ -162,6 +171,7 @@ def add_watermark_to_files_and_zip(file_paths, source, task_id):
         - Path to the zipped output file.
     """
     
+    zipped = False
     if source != "PREPROD":
         raise ValueError("Invalid source. Only 'PREPROD' sourced files will be processed.")
 
@@ -196,15 +206,20 @@ def add_watermark_to_files_and_zip(file_paths, source, task_id):
     if not processed_files:
         shutil.rmtree(output_dir)
         raise ValueError("No files were processed. Please check the input files and their formats.")
+    
+    # if length of the processed file is 1, then return file directly as it is in respective format
+    if len(processed_files) == 1:
+        return processed_files[0], zipped
 
     # Zip the processed files
+    zipped = True
     zip_output_path = f"output/{task_id}"
     shutil.make_archive(zip_output_path, "zip", output_dir)
 
     # Remove original watermarked files after zipping
     shutil.rmtree(output_dir)
 
-    return f"{zip_output_path}.zip"
+    return f"{zip_output_path}.zip", zipped
 
 def cleanup_file(file_path: str):
     
