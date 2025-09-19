@@ -10,6 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from xml.etree import ElementTree as ET
 from pptx import Presentation
+from spire.doc import Document, TextWatermark, WatermarkLayout, Color
 
 from celery_worker import celery_app
 
@@ -172,13 +173,50 @@ def add_watermark_to_image(image_path, output_path, watermark_text="DRAFT"):
 
 @celery_app.task
 def add_watermark_to_rtf(rtf_path, output_path, watermark_text="DRAFT"):
-    # Not implemented because the conversion tools do not support RTF watermarking well
-    pass
+        
+    doc = Document()
+    doc.LoadFromFile(rtf_path)
+
+    # Create watermark text
+    watermark = TextWatermark()
+    watermark.Text = "DRAFT"
+    watermark.FontSize = 60                # adjust size as needed
+    watermark.Color = Color.get_LightGray()
+    watermark.Layout = WatermarkLayout.Diagonal  # diagonal alignment
+    watermark.FontName = "Arial"
+
+    # Apply watermark
+    doc.Watermark = watermark
+
+    # Save to RTF
+    doc.SaveToFile(output_path)
 
 @celery_app.task
 def add_watermark_to_docx(input_doc_path, output_doc_path, watermark_text="DRAFT"):
-    # Not implemented because python-docx does not support watermarking well
-    pass
+
+    # Load the document
+    document = Document()
+    document.LoadFromFile(input_doc_path)
+
+    # Create a text watermark
+    watermark = TextWatermark()
+    watermark.Text = watermark_text
+    watermark.FontName = "Arial"
+    watermark.FontSize = 72
+    watermark.Color = Color.get_LightGray()
+    watermark.Layout = WatermarkLayout.Diagonal # Set diagonal layout
+
+    # If the document has at least one paragraph, delete the first one
+    if document.Sections.Count > 0:
+        first_section = document.Sections[0]
+        first_paragraph = first_section.Paragraphs[0]
+        first_section.Paragraphs.Remove(first_paragraph)
+
+    # Apply the watermark
+    document.Watermark = watermark
+
+    # Save the document
+    document.SaveToFile(output_doc_path)
 
 @celery_app.task
 def add_watermark_to_csv(input_csv_path, output_csv_to_pdf, watermark_text="DRAFT"):
