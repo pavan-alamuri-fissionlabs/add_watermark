@@ -65,9 +65,9 @@ def get_task_status(task_id: str):
 
         if task_result.ready():
             if task_result.successful():
-                response["result"] = "Processing complete. Please use the download link."
+                response["result"] = "Processing complete. Proceed with download."
             else:
-                response["result"] = str(task_result.info)  # Get exception info
+                response["result"] = str(task_result.info)
         return response
 
     except Exception as e:
@@ -146,7 +146,6 @@ def process_preprod_file(file_path, output_dir):
     ext = file_path.lower().split('.')[-1]
     file_name = os.path.basename(file_path).split('.')[0]
 
-    # Special case: CSV always produces PDF
     if ext == "csv":
         output_file = f"{file_name}-DRAFT.pdf"
     else:
@@ -205,12 +204,10 @@ def add_watermark_to_files_and_zip(file_paths, source, task_id):
         shutil.rmtree(output_dir)
         raise ValueError("No files were processed. Please check the input files and their formats.")
 
-    # If only one file, return it as is
     if len(processed_files) == 1:
         return processed_files[0], False
 
     # Zip the processed files
-    zipped = True
     zip_output_path = f"output/{task_id}"
     shutil.make_archive(zip_output_path, "zip", output_dir)
 
