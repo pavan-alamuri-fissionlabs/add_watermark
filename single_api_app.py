@@ -8,6 +8,7 @@ import add_watermark as aw
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, StreamingResponse
 from celery.result import AsyncResult
+from celery import chord, group
 
 from models import InputFileBatch
 from celery_worker import celery_app
@@ -30,34 +31,47 @@ EXTENSION_HANDLERS = {
     "ppt": aw.add_watermark_to_pptx,
 }
 
-def cleanup_file(file_path: str):
+def cleanup_file(file_path: str, zipped:bool):
     
     """
     Deletes a file.
     """
     
     try:
+        directory = os.path.dirname(file_path)
+        print(f"Directory to clean: {directory}")
         os.remove(file_path)
     except OSError as e:
         raise ValueError(f"Error deleting file {file_path}: {e}")
 
-def add_watermark_batch(files):
+def add_watermark_batch(files:dict):
     
     """
-    Initiates watermarking for a list of files and zips the output.
+    - Initiates watermarking for a list of files and zips the output.
+    - Orchestrates PARALLEL watermarking for a batch of files using a Celery Chord.
     Params:
         - file_paths: List of file paths to be watermarked.
     Returns:
         - task_id: ID of the Celery task for tracking.
     """
     
-    # Generate a task ID
-    task_id = str(uuid.uuid4())
-    task = add_watermark_to_files_and_zip.apply_async(
-        args=[files["file_paths"], files["source"], task_id],
-        task_id=task_id
+    file_paths = files["file_paths"]
+    source = files["source"]
+    
+    job_id = str(uuid.uuid4())
+    output_dir = f"output/{job_id}"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 1. Create a group of parallel tasks, one for each file
+    header = group(
+        process_single_file.s(path, source, output_dir) for path in file_paths
     )
-    return {"message": "Batch watermarking and zipping initiated.", "task_id": task.id}
+
+    # 2. Define the callback task that will zip the results
+    callback = zip_and_cleanup.s(task_id=job_id)
+    chord_result = chord(header)(callback)
+    
+    return {"message": "Batch watermarking and zipping initiated.", "task_id": chord_result.id}
 
 @celery_app.task
 def get_task_status(task_id: str):
@@ -113,51 +127,46 @@ def process_prod_file(file_path, output_dir):
     return output_path
 
 @celery_app.task
-def add_watermark_to_files_and_zip(file_paths, source, task_id):
+def process_single_file(file_path: str, source: str, output_dir: str) -> str:
     
     """
-    Celery task to process files based on source (PROD/PREPROD).
-    - PREPROD: watermark + return single/multiple as is or zipped
-    - PROD: no watermark, just return file(s) directly or zipped
+    Celery task to process ONE file. This will run in parallel for each file.
     """
     
-    zipped = True
+    try:
+        if source == "PREPROD":
+            return process_preprod_file(file_path, output_dir)
+        elif source == "PROD":
+            return process_prod_file(file_path, output_dir)
+        return None
+    except Exception as e:
+        print(f"Error processing file {file_path}: {e}")
+        return None
 
+@celery_app.task(bind=True)
+def zip_and_cleanup(self, processed_files: list, task_id: str) -> tuple:
+    """
+    Celery task to zip results. This is the chord callback, running ONCE after all
+    process_single_file tasks are complete.
+    """
+    valid_files = [path for path in processed_files if path]
     output_dir = f"output/{task_id}"
-    os.makedirs(output_dir, exist_ok=True)
-    
-    processed_files = []
 
-    for file_path in file_paths:
-        try:
-            if source == "PREPROD":
-                output_path = process_preprod_file(file_path, output_dir)
-            elif source == "PROD":
-                output_path = process_prod_file(file_path, output_dir)
-            else:
-                raise ValueError("Invalid source. Only 'PREPROD' or 'PROD' supported.")
+    if not valid_files:
+        raise ValueError("No files were successfully processed.")
 
-            if output_path:
-                processed_files.append(output_path)
+    # If only one file was successfully processed, return it directly without zipping
+    if len(valid_files) == 1:
+        return (valid_files[0], False)
 
-        except Exception as e:
-            raise ValueError(f"Error processing file {file_path}: {e}")
-
-    if not processed_files:
-        shutil.rmtree(output_dir)
-        raise ValueError("No files were processed. Please check the input files and their formats.")
-
-    if len(processed_files) == 1:
-        return processed_files[0], False
-
-    # Zip the processed files
+    # Zip the processed files if there are multiple
     zip_output_path = f"output/{task_id}"
     shutil.make_archive(zip_output_path, "zip", output_dir)
 
-    # Remove original watermarked files after zipping
+    # Clean up the directory of individual processed files
     shutil.rmtree(output_dir)
 
-    return f"{zip_output_path}.zip", zipped
+    return (f"{zip_output_path}.zip", True)
 
 @single_api_app.get("/download")
 def download(files: InputFileBatch,background_tasks: BackgroundTasks):
@@ -180,7 +189,7 @@ def download(files: InputFileBatch,background_tasks: BackgroundTasks):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found.")
     
-    background_tasks.add_task(cleanup_file, file_path)
+    background_tasks.add_task(cleanup_file, file_path, zipped)
 
     if not zipped:
         file_name = os.path.basename(file_path)
