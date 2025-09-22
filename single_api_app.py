@@ -30,6 +30,17 @@ EXTENSION_HANDLERS = {
     "ppt": aw.add_watermark_to_pptx,
 }
 
+def cleanup_file(file_path: str):
+    
+    """
+    Deletes a file.
+    """
+    
+    try:
+        os.remove(file_path)
+    except OSError as e:
+        raise ValueError(f"Error deleting file {file_path}: {e}")
+
 def add_watermark_batch(files):
     
     """
@@ -72,73 +83,7 @@ def get_task_status(task_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@single_api_app.get("/download")
-def download(files: InputFileBatch,background_tasks: BackgroundTasks):
-    
-    if not files.file_paths:
-        raise HTTPException(status_code=400, detail="No file paths provided.")
-
-    wrapper_result = add_watermark_batch(files.model_dump())
-    task_id = wrapper_result["task_id"]
-
-    task_result = AsyncResult(task_id, app=celery_app)
-    while not task_result.ready():
-        pass  # blocking for now (better: use status endpoint)
-
-    if not task_result.successful():
-        raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
-
-    file_path, zipped = task_result.result
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found.")
-    
-    background_tasks.add_task(cleanup_file, file_path)
-
-    if not zipped:
-        file_name = os.path.basename(file_path)
-        headers = {"Content-Disposition": f'attachment; filename="{file_name}"'}
-        return FileResponse(path=file_path, headers=headers, media_type="application/octet-stream")
-
-    file_name = "draft_files.zip"
-    headers = {"Content-Disposition": f'attachment; filename="{file_name}"'}
-    return FileResponse(path=file_path, headers=headers, media_type="application/zip")
-  
-@single_api_app.get("/download/stream")
-async def download_zip_file_stream(task_id: str):
-    
-    """
-    Streams the zipped file of watermarked documents.
-    Params:
-        - task_id: ID of the Celery task.
-    Returns: Streaming Zip File
-    """
-    
-    try:
-        task_result = AsyncResult(task_id, app=celery_app)
-
-        if not task_result.ready():
-            raise HTTPException(status_code=404, detail="Task not yet completed.")
-        
-        if not task_result.successful():
-            raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
-
-        zip_file_path = task_result.result
-
-        if not os.path.exists(zip_file_path):
-            raise HTTPException(status_code=404, detail="File not found.")
-
-        # Instead of loading file fully, stream it
-        z = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_DEFLATED)
-        z.write(zip_file_path, arcname="draft_files.zip")
-
-        headers = {"Content-Disposition": 'attachment; filename="draft_files.zip"'}
-        return StreamingResponse(z, media_type="application/zip", headers=headers)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+ 
 def process_preprod_file(file_path, output_dir):
     
     """Handle watermarking for PREPROD files."""
@@ -159,7 +104,6 @@ def process_preprod_file(file_path, output_dir):
         return output_path
     return None
 
-
 def process_prod_file(file_path, output_dir):
     
     """Handle copying for PROD files (no watermark)."""
@@ -167,7 +111,6 @@ def process_prod_file(file_path, output_dir):
     output_path = os.path.join(output_dir, os.path.basename(file_path))
     shutil.copy(file_path, output_path)
     return output_path
-
 
 @celery_app.task
 def add_watermark_to_files_and_zip(file_paths, source, task_id):
@@ -216,14 +159,68 @@ def add_watermark_to_files_and_zip(file_paths, source, task_id):
 
     return f"{zip_output_path}.zip", zipped
 
-def cleanup_file(file_path: str):
+@single_api_app.get("/download")
+def download(files: InputFileBatch,background_tasks: BackgroundTasks):
+    
+    if not files.file_paths:
+        raise HTTPException(status_code=400, detail="No file paths provided.")
+
+    wrapper_result = add_watermark_batch(files.model_dump())
+    task_id = wrapper_result["task_id"]
+
+    task_result = AsyncResult(task_id, app=celery_app)
+    while not task_result.ready():
+        pass  # blocking for now (better: use status endpoint)
+
+    if not task_result.successful():
+        raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
+
+    file_path, zipped = task_result.result
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found.")
+    
+    background_tasks.add_task(cleanup_file, file_path)
+
+    if not zipped:
+        file_name = os.path.basename(file_path)
+        headers = {"Content-Disposition": f'attachment; filename="{file_name}"'}
+        return FileResponse(path=file_path, headers=headers, media_type="application/octet-stream")
+
+    file_name = "draft_files.zip"
+    headers = {"Content-Disposition": f'attachment; filename="{file_name}"'}
+    return FileResponse(path=file_path, headers=headers, media_type="application/zip")
+
+@single_api_app.get("/download/stream")
+async def download_zip_file_stream(task_id: str):
     
     """
-    Deletes a file.
+    Streams the zipped file of watermarked documents.
+    Params:
+        - task_id: ID of the Celery task.
+    Returns: Streaming Zip File
     """
     
     try:
-        os.remove(file_path)
-    except OSError as e:
-        raise ValueError(f"Error deleting file {file_path}: {e}")
+        task_result = AsyncResult(task_id, app=celery_app)
 
+        if not task_result.ready():
+            raise HTTPException(status_code=404, detail="Task not yet completed.")
+        
+        if not task_result.successful():
+            raise HTTPException(status_code=500, detail=f"Task failed: {task_result.info}")
+
+        zip_file_path = task_result.result
+
+        if not os.path.exists(zip_file_path):
+            raise HTTPException(status_code=404, detail="File not found.")
+
+        # Instead of loading file fully, stream it
+        z = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_DEFLATED)
+        z.write(zip_file_path, arcname="draft_files.zip")
+
+        headers = {"Content-Disposition": 'attachment; filename="draft_files.zip"'}
+        return StreamingResponse(z, media_type="application/zip", headers=headers)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
